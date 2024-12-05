@@ -27,12 +27,30 @@ const commands = [
         ],
     },
     {
+        name: 'contest',
+        description: 'To get all users contest ranking',
+        options: [
+        ],
+    },
+    {
         name: 'gimme',
         description: 'It provides a problem',
         options: [
             {
                 name: 'difficulty',
                 description: 'Easy, Medium or Hard',
+                type: ApplicationCommandOptionType.String,
+                required: true,
+            },
+        ],
+    },
+    {
+        name: 'set',
+        description: 'stores your username',
+        options: [
+            {
+                name: 'username',
+                description: 'Enter Your Username of LeetCode',
                 type: ApplicationCommandOptionType.String,
                 required: true,
             },

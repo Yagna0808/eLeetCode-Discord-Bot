@@ -1,6 +1,7 @@
 const { Client, Events, GatewayIntentBits, SlashCommandBuilder ,EmbedBuilder, PermissionsBitField, Permissions } = require('discord.js')
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
 require("dotenv").config();
+const mongoose = require('mongoose');
 
 const fs = require('fs');
 const questionsData = require('../questions_by_difficulty.json');
@@ -33,10 +34,27 @@ function getQuestionDetails(randomQuestionId) {
     return question;
 }
 
+const guildSchema = new mongoose.Schema({
+    guildUsers: {
+        type: Map,
+        of: [String], // Values are arrays of strings (usernames)
+        default: new Map(), // Initialize as an empty Map
+    },
+});
+const Guild = mongoose.model('Guild', guildSchema);
+async function connectToMongoDB() {
+    try {
+        await mongoose.connect(process.env.MONGODB, { dbName: 'eLeetCode-Discord-Bot' });
+        console.log('Connected to MongoDB successfully!');
+    } catch (error) {
+        console.error('Error connecting to MongoDB:', error.message);
+        process.exit(1);
+    }
+}
 
-
-client.on(Events.ClientReady, (x) => {
+client.on(Events.ClientReady, async (x) => {
     console.log(`${x.user.tag} is ready!!`);
+    await connectToMongoDB();
     client.user.setActivity("Ready To Code");
 })
 
@@ -51,6 +69,49 @@ client.on('interactionCreate', async (interaction) => {
     if(!interaction.isChatInputCommand()) return;
     if (interaction.commandName === 'hey') {
         interaction.reply('Hello!!');
+    }
+
+    if (interaction.commandName === 'set') {
+        const guildId = interaction.guildId; // Get the guild ID
+        const username = interaction.options.get('username').value; // Get the username from the command options
+
+        try {
+            // Fetch the document containing the guildUsers Map
+            let guild = await Guild.findOne();
+
+            if (!guild) {
+                // If no document exists, create one
+                guild = new Guild();
+            }
+
+            const userMap = guild.guildUsers;
+
+            if (userMap.has(guildId)) {
+                // Guild ID exists
+                const usernames = userMap.get(guildId);
+
+                if (usernames.includes(username)) {
+                    // Username already registered
+                    await interaction.reply(`⚠️ The username **${username}** is already registered in this server.`);
+                } else {
+                    // Append the new username
+                    usernames.push(username);
+                    userMap.set(guildId, usernames);
+
+                    await guild.save(); // Save the updated document
+                    await interaction.reply(`✅ The username **${username}** has been successfully registered!`);
+                }
+            } else {
+                // Guild ID doesn't exist; create a new key-value pair
+                userMap.set(guildId, [username]);
+
+                await guild.save(); // Save the updated document
+                await interaction.reply(`✅ Guild created and the username **${username}** has been successfully registered!`);
+            }
+        } catch (error) {
+            console.error('Error handling set command:', error.message);
+            await interaction.reply('❌ An error occurred while processing your request. Please try again later.');
+        }
     }
 
     if (interaction.commandName === 'gimme') {
@@ -187,6 +248,88 @@ client.on('interactionCreate', async (interaction) => {
             await interaction.reply(
                 'Failed to fetch data. Please try again later or check the username.'
             );
+        }
+    }
+
+    if (interaction.commandName === 'contest') {
+        const guildId = interaction.guildId; // Get the guild ID
+
+        try {
+            // Fetch the document containing the guildUsers Map
+            const guild = await Guild.findOne();
+            if (!guild || !guild.guildUsers.has(guildId)) {
+                await interaction.reply('⚠️ No users are registered for this server.');
+                return;
+            }
+
+            const usernames = guild.guildUsers.get(guildId); // Get usernames for the guild
+            const contestData = []; // Array to hold contest information
+
+            await interaction.deferReply(); // Acknowledge the interaction
+
+            for (const username of usernames) {
+                try {
+                    const response = await fetch(`https://alfa-leetcode-api.onrender.com/userContestRankingInfo/${username}`);
+                    if (!response.ok) throw new Error(`Invalid response for username: ${username}`);
+
+                    const data = await response.json();
+                    console.log(data.data.userContestRanking.globalRanking)
+                    // Extract globalRanking
+                    const globalRanking = data.data.userContestRanking.globalRanking || 'No ranking available.';
+                    
+                    contestData.push({
+                        username,
+                        globalRanking,
+                        ratings: data.data.userContestRanking.rating,
+                        attendedContests: data.data.userContestRanking.attendedContestsCount,
+                    });
+        
+                    console.log(contestData)
+                } catch (error) {
+                    console.error(`Error fetching data for ${username}:`, error.message);
+                    
+                }
+            }
+
+            // Create an embed with the contest data
+            const embed = new EmbedBuilder()
+                .setColor('#5865F2')
+                .setTitle('Contest Rankings')
+                .setDescription('Here is the contest ranking data for all registered users in this server:')
+                .setTimestamp();
+
+            // Prepare table headers
+            // let table = `**Username**       | **Ranking**       | **Rating**      | **Total Contests**\n`;
+            // table += `------------------------------------------------------------\n`;
+            let table = `  Username   |  Ranking   |  Rating  |  Total Contests \n`;
+            table += `-------------|------------|----------|-----------------\n`;
+            function centerText(text, width) {
+                const str = text.toString(); // Convert to string in case it's a number
+                const padding = Math.max(0, width - str.length);
+                const padStart = Math.floor(padding / 2);
+                const padEnd = padding - padStart;
+                return ' '.repeat(padStart) + str + ' '.repeat(padEnd);
+            }
+            // Iterate through contestData
+            for (const entry of contestData) {
+                if (entry.message) {
+                    table += `${centerText(entry.username, 12)} | ${centerText(entry.message, 10)} | ${centerText('N/A', 8)} | ${centerText('N/A', 11)}\n`;
+                } else {
+                    const globalRanking = entry.globalRanking || 'No ranking';
+                    const rating = entry.ratings ? entry.ratings.toFixed(2) : 'N/A'; // Check if `rating` exists
+                    const attendedContestsCount = entry.attendedContests || 'N/A';
+
+                    table += `${centerText(entry.username, 12)} | ${centerText(globalRanking, 10)} | ${centerText(rating, 8)} | ${centerText(attendedContestsCount, 11)}\n`;
+                }
+            }
+
+            // Add the table as a field
+            embed.addFields({ name: 'Contest Data', value: `\`\`\`${table}\`\`\``, inline: false });
+
+            await interaction.editReply({ embeds: [embed] });
+        } catch (error) {
+            console.error('Error handling contest command:', error);
+            await interaction.editReply('❌ An error occurred while processing your request. Please try again later.');
         }
     }
 
