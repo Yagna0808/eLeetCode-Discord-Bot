@@ -4,4 +4,4 @@
 Problems.json
 questions_by_difficulty.json
 collectData.js
-connect.js
+src/connect.js
