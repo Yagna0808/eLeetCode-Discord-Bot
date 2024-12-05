@@ -25,6 +25,18 @@ const commands = [
         description: 'To get a daily problem',
         options: [
         ],
+    },
+    {
+        name: 'gimme',
+        description: 'It provides a problem',
+        options: [
+            {
+                name: 'difficulty',
+                description: 'Easy, Medium or Hard',
+                type: ApplicationCommandOptionType.String,
+                required: true,
+            },
+        ],
     }
 ];
 
@@ -32,17 +44,16 @@ const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
 
 (async () => {
     try {
-        console.log('Registering slash commands...');
+        console.log('Registering global slash commands...');
 
         await rest.put(
-            Routes.applicationGuildCommands(
+            Routes.applicationCommands(
                 process.env.CLIENT_ID,
-                process.env.GUILD_ID
             ),
             { body: commands }
         );
 
-        console.log('Slash commands were registered successfully!');
+        console.log('Global Slash commands were registered successfully!');
     } catch (error) {
         console.log(`There was an error: ${error}`);
     }

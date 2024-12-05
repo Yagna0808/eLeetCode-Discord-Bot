@@ -1,3 +1,6 @@
 
 /node_modules
 .env
+Problems.json
+questions_by_difficulty.json
+collectData.js
