@@ -2,10 +2,13 @@ const { Client, Events, GatewayIntentBits, SlashCommandBuilder ,EmbedBuilder, Pe
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
 require("dotenv").config();
 const mongoose = require('mongoose');
-
+const express = require('express');
 const fs = require('fs');
 const questionsData = require('../questions_by_difficulty.json');
 const problemsData = require('../Problems.json');
+
+const app = express();
+
 
 function getRandomQuestion(difficulty) {
     const difficultyKey = `${difficulty}Questions`; // e.g., 'easyQuestions', 'mediumQuestions'
@@ -336,3 +339,11 @@ client.on('interactionCreate', async (interaction) => {
 });
 
 client.login(process.env.TOKEN);
+app.get('/', (req, res) => {
+    res.send('Hello, World!');
+});
+
+// Start the server
+app.listen(80, () => {
+    console.log(`Server is running on http://localhost:80`);
+});
